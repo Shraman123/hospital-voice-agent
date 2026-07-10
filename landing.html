@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Vaani — AI voice agents for healthcare</title>
+<meta name="description" content="Vaani calls your patients, reminds them of appointments, and confirms, reschedules, or cancels — in Hindi or English, automatically." />
+<link rel="icon" type="image/svg+xml" href="/assets/logo-badge.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F0EEE6;
+    --bg-card: #FAF9F5;
+    --ink: #262019;
+    --ink-dim: #7A7368;
+    --ink-faint: #A39C8F;
+    --border: #E4E0D6;
+    --accent: #D97757;
+    --accent-hover: #c9663f;
+    --accent-dim: #D9775718;
+    --accent-ink: #FAF9F5;
+    --sage: #93A57C;
+    --radius-sm: 10px;
+    --radius-md: 16px;
+    --radius-lg: 22px;
+    --shadow-sm: 0 1px 2px rgba(38,32,25,0.05), 0 1px 1px rgba(38,32,25,0.04);
+    --shadow-md: 0 16px 36px -16px rgba(38,32,25,0.20), 0 2px 8px rgba(38,32,25,0.06);
+    --shadow-lg: 0 28px 64px -20px rgba(38,32,25,0.22), 0 4px 12px rgba(38,32,25,0.08);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', -apple-system, sans-serif;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    position: relative;
+  }
+  /* Subtle grain for a moodier, less "flat template" surface */
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.02;
+    pointer-events: none;
+    z-index: 2;
+    mix-blend-mode: multiply;
+  }
+  a { color: inherit; text-decoration: none; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 1.5rem; }
+
+  /* Ambient drifting blobs - slow, warm, alive without being loud */
+  .ambient { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+  .blob { position: absolute; border-radius: 50%; filter: blur(70px); opacity: 0.5; will-change: transform; }
+  .blob1 { width: 620px; height: 620px; background: radial-gradient(circle, var(--accent) 0%, transparent 70%); top: -12%; left: 8%; animation: driftA 22s ease-in-out infinite; }
+  .blob2 { width: 520px; height: 520px; background: radial-gradient(circle, var(--sage) 0%, transparent 70%); top: 2%; right: 4%; animation: driftB 26s ease-in-out infinite; }
+  .blob3 { width: 420px; height: 420px; background: radial-gradient(circle, var(--accent) 0%, transparent 70%); top: 20%; left: 42%; opacity: 0.28; animation: driftC 30s ease-in-out infinite; }
+  @keyframes driftA { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(60px,40px) scale(1.08); } }
+  @keyframes driftB { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-50px,30px) scale(0.95); } }
+  @keyframes driftC { 0%, 100% { transform: translate(0,0) scale(1); } 50% { transform: translate(30px,-40px) scale(1.12); } }
+
+  /* Nav */
+  nav { position: sticky; top: 0; z-index: 50; backdrop-filter: blur(10px); background: rgba(240,238,230,0.82); border-bottom: 1px solid var(--border); }
+  nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 4.25rem; }
+  .logo { display: inline-flex; align-items: center; gap: 0.55rem; font-family: 'Fraunces', serif; font-size: 1.35rem; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+  .logo svg { display: block; }
+  .navlinks { display: flex; gap: 2.1rem; font-size: 0.89rem; color: var(--ink-dim); letter-spacing: 0.01em; }
+  .navlinks a { transition: color 0.15s ease; }
+  .navlinks a:hover { color: var(--ink); }
+  .btn { display: inline-block; padding: 0.6rem 1.2rem; border-radius: var(--radius-sm); font-size: 0.88rem; font-weight: 600; cursor: pointer; border: none; transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease; }
+  .btn-primary { background: var(--accent); color: var(--accent-ink); box-shadow: var(--shadow-sm); }
+  .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+  .btn-ghost { border: 1px solid var(--border); color: var(--ink); background: transparent; }
+  .btn-ghost:hover { border-color: #c9c4b6; background: #fff; }
+
+  /* Hero */
+  header.hero { position: relative; padding: 6.5rem 0 4.5rem; text-align: center; z-index: 1; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--ink-dim); background: var(--bg-card); border: 1px solid var(--border); border-radius: 999px; padding: 0.35rem 0.9rem; margin-bottom: 2rem; box-shadow: var(--shadow-sm); }
+  .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  h1.hero-title { font-family: 'Fraunces', serif; font-size: clamp(2.7rem, 6.2vw, 4.6rem); font-weight: 500; line-height: 1.08; letter-spacing: -0.02em; margin: 0 0 1.5rem; color: var(--ink); }
+  h1.hero-title em { font-style: italic; color: var(--accent); }
+  .hero-sub { font-size: 1.18rem; line-height: 1.6; color: var(--ink-dim); max-width: 600px; margin: 0 auto 2.5rem; }
+  .hero-ctas { display: flex; gap: 0.9rem; justify-content: center; flex-wrap: wrap; }
+  .btn-lg { padding: 0.85rem 1.7rem; font-size: 0.95rem; border-radius: 12px; }
+
+  /* Live-call visual centerpiece */
+  .call-card { position: relative; width: min(360px, 88vw); margin: 3.5rem auto 0; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.6rem 1.6rem 1.4rem; box-shadow: var(--shadow-lg); text-align: left; }
+  .call-card-header { display: flex; align-items: center; justify-content: space-between; font-size: 0.78rem; color: var(--ink-dim); margin-bottom: 1.3rem; font-variant-numeric: tabular-nums; }
+  .call-card-header .live { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--accent); font-weight: 600; }
+  .call-card-header .live .pulse-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: blink 1.6s ease-in-out infinite; }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+  .call-avatar-wrap { position: relative; width: 84px; height: 84px; margin: 0 auto 1rem; display: flex; align-items: center; justify-content: center; }
+  .ring { position: absolute; border-radius: 50%; border: 1.5px solid var(--accent); opacity: 0; animation: ripple 2.4s ease-out infinite; }
+  .ring.r1 { width: 100%; height: 100%; animation-delay: 0s; }
+  .ring.r2 { width: 100%; height: 100%; animation-delay: 0.8s; }
+  .ring.r3 { width: 100%; height: 100%; animation-delay: 1.6s; }
+  @keyframes ripple { 0% { transform: scale(0.6); opacity: 0.55; } 100% { transform: scale(1.9); opacity: 0; } }
+  .avatar { width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(150deg, var(--accent), var(--accent-hover)); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; font-family: 'Fraunces', serif; font-weight: 500; font-size: 1.3rem; z-index: 1; }
+
+  .call-name { text-align: center; font-weight: 600; font-size: 1rem; color: var(--ink); }
+  .call-status { text-align: center; font-size: 0.85rem; color: var(--ink-dim); min-height: 1.4em; margin: 0.15rem 0 1.2rem; transition: opacity 0.3s ease; }
+
+  .mini-waveform { display: flex; align-items: center; justify-content: center; gap: 3px; height: 30px; }
+  .mini-waveform span { width: 3px; border-radius: 2px; background: var(--accent); opacity: 0.7; animation: wave 1.2s ease-in-out infinite; }
+  @keyframes wave { 0%, 100% { height: 6px; opacity: 0.3; } 50% { height: 26px; opacity: 0.85; } }
+
+  /* Scroll reveal */
+  .reveal { opacity: 0; transform: translateY(22px); transition: opacity 0.7s cubic-bezier(.2,.7,.3,1), transform 0.7s cubic-bezier(.2,.7,.3,1); }
+  .reveal.in-view { opacity: 1; transform: translateY(0); }
+
+  /* Sections */
+  section { position: relative; z-index: 1; padding: 4.5rem 0; }
+  .section-label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); font-weight: 600; margin-bottom: 0.8rem; }
+  h2.section-title { font-family: 'Fraunces', serif; font-size: clamp(1.9rem, 3.6vw, 2.6rem); font-weight: 500; letter-spacing: -0.015em; line-height: 1.15; margin: 0 0 1rem; max-width: 560px; color: var(--ink); }
+  .section-sub { color: var(--ink-dim); max-width: 520px; margin-bottom: 3rem; font-size: 1.03rem; }
+
+  /* Proof / stats strip */
+  .stats { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 3rem 0; }
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; text-align: center; }
+  @media (max-width: 800px) { .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 2rem 1rem; } }
+  .stat-num { font-family: 'Fraunces', serif; font-size: clamp(2.1rem, 4vw, 2.9rem); font-weight: 500; color: var(--accent); letter-spacing: -0.02em; line-height: 1; }
+  .stat-label { font-size: 0.85rem; color: var(--ink-dim); margin-top: 0.5rem; max-width: 160px; margin-left: auto; margin-right: auto; }
+
+  /* Feature bento grid - intentionally asymmetric, not a uniform 3x2 */
+  .bento { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.1rem; }
+  .bento .card.wide { grid-column: span 2; }
+  @media (max-width: 800px) { .bento { grid-template-columns: 1fr; } .bento .card.wide { grid-column: span 1; } }
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.75rem; box-shadow: var(--shadow-sm); transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; }
+  .card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); border-color: #d8d2c4; }
+  .card .icon { width: 42px; height: 42px; border-radius: 12px; background: var(--accent-dim); color: var(--accent); display: flex; align-items: center; justify-content: center; margin-bottom: 1.15rem; }
+  .card .icon svg { width: 21px; height: 21px; }
+  .card h3 { font-size: 1.05rem; margin: 0 0 0.5rem; font-weight: 600; color: var(--ink); }
+  .card p { color: var(--ink-dim); font-size: 0.93rem; margin: 0; }
+
+  /* How it works */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.2rem; counter-reset: step; }
+  @media (max-width: 800px) { .steps { grid-template-columns: 1fr; } }
+  .step { counter-increment: step; padding-top: 0.25rem; border-top: 2px solid var(--border); }
+  .step::before { content: counter(step, decimal-leading-zero); font-family: 'Fraunces', serif; font-size: 1.5rem; color: var(--accent); display: block; margin: 0.9rem 0 0.6rem; }
+  .step h3 { font-size: 1.03rem; margin: 0 0 0.4rem; color: var(--ink); }
+  .step p { color: var(--ink-dim); font-size: 0.93rem; margin: 0; }
+
+  /* Stack strip */
+  .stack-strip { display: flex; flex-wrap: wrap; gap: 0.6rem 1.6rem; align-items: center; justify-content: center; color: var(--ink-dim); font-size: 0.85rem; padding: 1.75rem 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+
+  /* Contact */
+  .contact-wrap { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: 3.5rem; align-items: start; }
+  @media (max-width: 800px) { .contact-wrap { grid-template-columns: 1fr; } }
+  .field { margin-bottom: 1.1rem; }
+  label { display: block; font-size: 0.85rem; color: var(--ink-dim); margin-bottom: 0.4rem; }
+  input, textarea { width: 100%; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.7rem 0.85rem; color: var(--ink); font-family: inherit; font-size: 0.92rem; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+  input:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+  textarea { resize: vertical; min-height: 110px; }
+  #contact-status { margin-top: 1rem; font-size: 0.88rem; display: none; padding: 0.7rem 0.9rem; border-radius: var(--radius-sm); }
+  #contact-status.ok { background: #E8F0E4; color: #4C7A3E; display: block; }
+  #contact-status.err { background: #F5E2DE; color: #A3402A; display: block; }
+
+  footer { border-top: 1px solid var(--border); padding: 2.5rem 0; color: var(--ink-dim); font-size: 0.85rem; }
+  footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+
+  /* Announcement bar */
+  .announce { background: var(--ink); color: var(--bg-card); text-align: center; font-size: 0.83rem; padding: 0.55rem 1rem; position: relative; z-index: 60; }
+  .announce a { color: var(--accent); font-weight: 600; margin-left: 0.4rem; }
+  .announce a:hover { text-decoration: underline; }
+
+  /* Dark dashboard preview - deliberately breaks from the light page for depth */
+  .dash-section { padding-top: 1rem; }
+  .dash-frame {
+    background: #171512;
+    border-radius: var(--radius-lg);
+    padding: 1.4rem 1.4rem 1.6rem;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid #2b2723;
+  }
+  .dash-topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 0.3rem 1.2rem; }
+  .dash-dots { display: flex; gap: 6px; }
+  .dash-dots span { width: 9px; height: 9px; border-radius: 50%; background: #3a3630; }
+  .dash-title { color: #C9C2B4; font-size: 0.85rem; font-weight: 600; }
+  .dash-live { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: #7fd99a; font-weight: 600; }
+  .dash-live .pulse-dot-sm { width: 6px; height: 6px; border-radius: 50%; background: #7fd99a; animation: blink 1.6s ease-in-out infinite; }
+
+  .dash-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: #2b2723; border-radius: var(--radius-md); overflow: hidden; margin-bottom: 1px; }
+  @media (max-width: 800px) { .dash-stats { grid-template-columns: repeat(2, 1fr); } }
+  .dash-stat { background: #1c1a16; padding: 1.1rem 1.2rem; }
+  .dash-stat-label { font-size: 0.75rem; color: #8a8377; margin-bottom: 0.5rem; }
+  .dash-stat-value { font-family: 'Fraunces', serif; font-size: 1.7rem; color: #F4F1EA; font-variant-numeric: tabular-nums; }
+  .dash-stat-value .unit { font-size: 0.95rem; color: #8a8377; margin-left: 0.15rem; }
+  .dash-sparkline { margin-top: 0.5rem; height: 24px; }
+  .dash-sparkline polyline { fill: none; stroke: var(--accent); stroke-width: 1.6; }
+
+  .dash-list { background: #1c1a16; border-radius: var(--radius-md); margin-top: 1px; overflow: hidden; }
+  .dash-row { display: flex; align-items: center; justify-content: space-between; padding: 0.8rem 1.2rem; font-size: 0.86rem; border-bottom: 1px solid #262320; transition: background 0.4s ease; }
+  .dash-row:last-child { border-bottom: none; }
+  .dash-row.dash-row-new { animation: rowIn 0.6s ease; }
+  @keyframes rowIn { 0% { background: #2a2114; opacity: 0; transform: translateY(-6px); } 60% { opacity: 1; transform: translateY(0); } 100% { background: transparent; } }
+  .dash-row-name { color: #E8E4DA; }
+  .dash-row-meta { color: #8a8377; font-size: 0.78rem; margin-left: 0.5rem; }
+  .dash-row-status { font-size: 0.76rem; font-weight: 600; padding: 0.2rem 0.6rem; border-radius: 999px; }
+  .dash-row-status.confirmed { background: #1f3324; color: #7fd99a; }
+  .dash-row-status.reschedule { background: #3a2c14; color: #e0b862; }
+  .dash-row-status.progress { background: #2a2318; color: var(--accent); }
+
+  /* Floating contact bubble */
+  .float-contact {
+    position: fixed;
+    bottom: 1.6rem;
+    right: 1.6rem;
+    z-index: 40;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--ink);
+    color: var(--bg-card);
+    padding: 0.75rem 1.1rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    box-shadow: var(--shadow-lg);
+    transition: transform 0.2s ease;
+  }
+  .float-contact:hover { transform: translateY(-2px); }
+  .float-contact svg { width: 16px; height: 16px; }
+  @media (max-width: 640px) { .float-contact span.label { display: none; } .float-contact { padding: 0.75rem; } }
+
+  /* Closing CTA */
+  .closing-cta { text-align: center; padding: 5rem 0 4.5rem; }
+  .closing-cta h2 { font-family: 'Fraunces', serif; font-size: clamp(2.1rem, 4.5vw, 3rem); font-weight: 500; letter-spacing: -0.015em; margin: 0 0 1.7rem; }
+  .closing-ctas { display: flex; gap: 0.9rem; justify-content: center; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+
+<div class="ambient">
+  <div class="blob blob1"></div>
+  <div class="blob blob2"></div>
+  <div class="blob blob3"></div>
+</div>
+
+<div class="announce">
+  Built on real telephony — not a chat widget. <a href="#how">See how a call actually works →</a>
+</div>
+
+<nav>
+  <div class="wrap">
+    <div class="logo">
+      <svg width="20" height="20" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <line x1="7" y1="9" x2="7" y2="23" stroke="#D97757" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="13" y1="4" x2="13" y2="28" stroke="#D97757" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="19" y1="7" x2="19" y2="25" stroke="#D97757" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="25" y1="2" x2="25" y2="30" stroke="#D97757" stroke-width="3.5" stroke-linecap="round"/>
+      </svg>
+      Vaani
+    </div>
+    <div class="navlinks">
+      <a href="#product">Product</a>
+      <a href="#how">How it works</a>
+      <a href="#contact">Contact</a>
+    </div>
+    <a href="#contact" class="btn btn-primary">Get in touch</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow"><span class="dot"></span> Now calling patients in Hindi &amp; English</div>
+    <h1 class="hero-title">Every patient reminded,<br><em>in their own language.</em></h1>
+    <p class="hero-sub">Vaani is an AI voice agent that calls your patients, reminds them of upcoming appointments, and captures a confirm, reschedule, or cancel — automatically, in whichever language they answer in.</p>
+    <div class="hero-ctas">
+      <a href="#contact" class="btn btn-primary btn-lg">Book a demo</a>
+      <a href="#how" class="btn btn-ghost btn-lg">See how it works</a>
+    </div>
+    <div class="call-card">
+      <div class="call-card-header">
+        <span class="live"><span class="pulse-dot"></span> Live call</span>
+        <span id="call-timer">00:03</span>
+      </div>
+      <div class="call-avatar-wrap">
+        <div class="ring r1"></div>
+        <div class="ring r2"></div>
+        <div class="ring r3"></div>
+        <div class="avatar">RM</div>
+      </div>
+      <div class="call-name">Rohan Mehta</div>
+      <div class="call-status" id="call-status-text">Calling…</div>
+      <div class="mini-waveform">
+        <span style="animation-delay:0s"></span><span style="animation-delay:0.1s"></span>
+        <span style="animation-delay:0.2s"></span><span style="animation-delay:0.3s"></span>
+        <span style="animation-delay:0.15s"></span><span style="animation-delay:0.25s"></span>
+        <span style="animation-delay:0.05s"></span><span style="animation-delay:0.35s"></span>
+        <span style="animation-delay:0.2s"></span><span style="animation-delay:0.1s"></span>
+        <span style="animation-delay:0s"></span><span style="animation-delay:0.3s"></span>
+        <span style="animation-delay:0.15s"></span><span style="animation-delay:0.05s"></span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="stack-strip">
+  <span>Real telephony, not chat</span>
+  <span>·</span>
+  <span>Hindi + English, auto-detected</span>
+  <span>·</span>
+  <span>Consent-first calls</span>
+  <span>·</span>
+  <span>Outcome logged automatically</span>
+</div>
+
+<section class="stats">
+  <div class="wrap">
+    <div class="stats-grid reveal">
+      <div>
+        <div class="stat-num">2</div>
+        <div class="stat-label">Languages detected and matched automatically, mid-sentence</div>
+      </div>
+      <div>
+        <div class="stat-num">24/7</div>
+        <div class="stat-label">Calls placed whenever your schedule needs them</div>
+      </div>
+      <div>
+        <div class="stat-num">&lt;1s</div>
+        <div class="stat-label">Typical response time per conversational turn</div>
+      </div>
+      <div>
+        <div class="stat-num">100%</div>
+        <div class="stat-label">Of calls open with an explicit consent line</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="dash-section">
+  <div class="wrap">
+    <div class="section-label reveal">Platform</div>
+    <h2 class="section-title reveal">Every call, tracked the moment it happens.</h2>
+    <p class="section-sub reveal">The same dashboard you'd use to trigger reminders and review outcomes — nothing staged, this is the real thing.</p>
+    <div class="dash-frame reveal">
+      <div class="dash-topbar">
+        <div class="dash-dots"><span></span><span></span><span></span></div>
+        <div class="dash-title">Vaani — Call Dashboard</div>
+        <div class="dash-live"><span class="pulse-dot-sm"></span> Live</div>
+      </div>
+      <div class="dash-stats">
+        <div class="dash-stat">
+          <div class="dash-stat-label">Calls today</div>
+          <div class="dash-stat-value"><span id="dash-calls">128</span></div>
+          <svg class="dash-sparkline" viewBox="0 0 100 24" preserveAspectRatio="none">
+            <polyline points="0,18 12,15 24,17 36,10 48,12 60,6 72,9 84,4 100,7"/>
+          </svg>
+        </div>
+        <div class="dash-stat">
+          <div class="dash-stat-label">Confirmed</div>
+          <div class="dash-stat-value"><span id="dash-confirmed">94</span><span class="unit">/128</span></div>
+          <svg class="dash-sparkline" viewBox="0 0 100 24" preserveAspectRatio="none">
+            <polyline points="0,16 12,14 24,15 36,9 48,11 60,7 72,8 84,5 100,6"/>
+          </svg>
+        </div>
+        <div class="dash-stat">
+          <div class="dash-stat-label">Avg. response</div>
+          <div class="dash-stat-value">0.8<span class="unit">s</span></div>
+          <svg class="dash-sparkline" viewBox="0 0 100 24" preserveAspectRatio="none">
+            <polyline points="0,10 12,12 24,9 36,13 48,8 60,11 72,7 84,9 100,6"/>
+          </svg>
+        </div>
+        <div class="dash-stat">
+          <div class="dash-stat-label">Languages used</div>
+          <div class="dash-stat-value">HI <span class="unit">/</span> EN</div>
+          <svg class="dash-sparkline" viewBox="0 0 100 24" preserveAspectRatio="none">
+            <polyline points="0,14 12,8 24,14 36,8 48,15 60,7 72,15 84,8 100,13"/>
+          </svg>
+        </div>
+      </div>
+      <div class="dash-list" id="dash-list">
+        <div class="dash-row">
+          <span><span class="dash-row-name">Rohan Mehta</span><span class="dash-row-meta">Dr. Anjali Sharma · 10:30 AM</span></span>
+          <span class="dash-row-status confirmed">Confirmed</span>
+        </div>
+        <div class="dash-row">
+          <span><span class="dash-row-name">Meghmala Maity</span><span class="dash-row-meta">Dr. Shraman Hazra · 2:00 PM</span></span>
+          <span class="dash-row-status reschedule">Reschedule</span>
+        </div>
+        <div class="dash-row">
+          <span><span class="dash-row-name">Aisha Khan</span><span class="dash-row-meta">Dr. Meera Iyer · 11:15 AM</span></span>
+          <span class="dash-row-status confirmed">Confirmed</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="product">
+  <div class="wrap">
+    <div class="section-label reveal">Product</div>
+    <h2 class="section-title reveal">Built for the way hospitals actually run.</h2>
+    <p class="section-sub reveal">No-shows are expensive. Front-desk staff calling every patient by hand doesn't scale. Vaani does the calling — properly, patiently, in the patient's own language.</p>
+    <div class="bento">
+      <div class="card wide reveal">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <path d="M12 3c2.5 2.5 4 5.5 4 9s-1.5 6.5-4 9c-2.5-2.5-4-5.5-4-9s1.5-6.5 4-9Z"/>
+          </svg>
+        </div>
+        <h3>Bilingual by default</h3>
+        <p>Detects Hindi, English, or a mix mid-sentence, and always replies in the language the patient just used — no configuration needed.</p>
+      </div>
+      <div class="card reveal">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M8 12.5l2.5 2.5L16 9.5"/>
+          </svg>
+        </div>
+        <h3>Confirms, reschedules, cancels</h3>
+        <p>Every call ends with a clear outcome, captured automatically.</p>
+      </div>
+      <div class="card reveal">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z"/>
+            <path d="M9 12l2 2 4-4"/>
+          </svg>
+        </div>
+        <h3>Consent-first, every call</h3>
+        <p>States clearly that the call may be recorded before anything else happens.</p>
+      </div>
+      <div class="card wide reveal">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6.5 3h3l2 5-2.5 1.5a12 12 0 0 0 5.5 5.5L16 12.5l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 4.5 5a2 2 0 0 1 2-2Z"/>
+          </svg>
+        </div>
+        <h3>Real phone calls</h3>
+        <p>Not an app, not a chatbot widget — an actual outbound call to the number already on file, no new hardware or phone lines required.</p>
+      </div>
+      <div class="card wide reveal">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="6" y="4" width="12" height="17" rx="2"/>
+            <path d="M9 3h6a1 1 0 0 1 1 1v1H8V4a1 1 0 0 1 1-1Z"/>
+            <line x1="9" y1="11" x2="15" y2="11"/>
+            <line x1="9" y1="15" x2="15" y2="15"/>
+          </svg>
+        </div>
+        <h3>Outcomes, tracked</h3>
+        <p>A simple dashboard shows every call placed and what the patient decided, in real time — no manual entry needed.</p>
+      </div>
+      <div class="card reveal">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13 3 4 14h6l-1 7 9-11h-6l1-7Z"/>
+          </svg>
+        </div>
+        <h3>Set up in a day</h3>
+        <p>Point Vaani at your patient list and appointment schedule.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <div class="section-label reveal">How it works</div>
+    <h2 class="section-title reveal">Three steps, no new workflow to learn.</h2>
+    <div class="steps">
+      <div class="step reveal">
+        <h3>Upload your appointment list</h3>
+        <p>Patient name, phone number, doctor, and appointment time — that's all Vaani needs.</p>
+      </div>
+      <div class="step reveal">
+        <h3>Vaani calls, in real time</h3>
+        <p>Each patient gets a natural, bilingual call: consent line, reminder, and a clear question.</p>
+      </div>
+      <div class="step reveal">
+        <h3>You see the outcome instantly</h3>
+        <p>Confirmed, rescheduled, or cancelled — logged the moment the call ends.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="contact">
+  <div class="wrap">
+    <div class="contact-wrap">
+      <div class="reveal">
+        <div class="section-label">Contact</div>
+        <h2 class="section-title">Let's talk about your front desk.</h2>
+        <p class="section-sub">Tell us a bit about your hospital or clinic and we'll get back to you shortly.</p>
+      </div>
+      <div class="reveal">
+        <form id="contact-form">
+          <div class="field">
+            <label for="name">Name</label>
+            <input type="text" id="name" name="name" required />
+          </div>
+          <div class="field">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" required />
+          </div>
+          <div class="field">
+            <label for="org">Hospital / Clinic</label>
+            <input type="text" id="org" name="org" />
+          </div>
+          <div class="field">
+            <label for="message">Message</label>
+            <textarea id="message" name="message" required></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary btn-lg" id="contact-submit">Send message</button>
+          <div id="contact-status"></div>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="closing-cta">
+  <div class="wrap reveal">
+    <h2>Ready to stop chasing no-shows?</h2>
+    <div class="closing-ctas">
+      <a href="#contact" class="btn btn-primary btn-lg">Book a demo</a>
+      <a href="#product" class="btn btn-ghost btn-lg">Explore the product</a>
+    </div>
+  </div>
+</section>
+
+<a href="#contact" class="float-contact">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 4h11a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H9l-4 3v-3H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/>
+  </svg>
+  <span class="label">Contact us</span>
+</a>
+
+<footer>
+  <div class="wrap">
+    <div class="logo" style="font-size:1.1rem;">
+      <svg width="17" height="17" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <line x1="7" y1="9" x2="7" y2="23" stroke="#D97757" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="13" y1="4" x2="13" y2="28" stroke="#D97757" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="19" y1="7" x2="19" y2="25" stroke="#D97757" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="25" y1="2" x2="25" y2="30" stroke="#D97757" stroke-width="3.5" stroke-linecap="round"/>
+      </svg>
+      Vaani
+    </div>
+    <div>Built for hospitals that don't want to miss a patient.</div>
+  </div>
+</footer>
+
+<script>
+// Cycles the hero's "live call" card through a realistic bilingual call
+// script and ticks its duration timer, so the visual reads as an actual
+// call in progress rather than a static mockup.
+(function () {
+  const statusEl = document.getElementById('call-status-text');
+  const timerEl = document.getElementById('call-timer');
+  const script = [
+    'Calling…',
+    'Hello, this is an automated call from City Care Hospital…',
+    'नमस्ते, यह City Care Hospital की तरफ से कॉल है…',
+    'Reminding about your appointment on July 12…',
+    'क्या आप कन्फर्म, रीशेड्यूल, या कैंसिल करना चाहेंगे?',
+    'Appointment confirmed ✓',
+  ];
+  let i = 0;
+  setInterval(() => {
+    i = (i + 1) % script.length;
+    statusEl.style.opacity = 0;
+    setTimeout(() => {
+      statusEl.textContent = script[i];
+      statusEl.style.opacity = 1;
+    }, 250);
+  }, 2600);
+
+  let seconds = 3;
+  setInterval(() => {
+    seconds++;
+    const m = String(Math.floor(seconds / 60)).padStart(2, '0');
+    const s = String(seconds % 60).padStart(2, '0');
+    timerEl.textContent = `${m}:${s}`;
+  }, 1000);
+})();
+
+// Keeps the dashboard preview feeling live: ticks the "calls today" /
+// "confirmed" counters up and periodically drops a new row into the call
+// list with a highlight-fade-in, as if a real call just finished.
+(function () {
+  const callsEl = document.getElementById('dash-calls');
+  const confirmedEl = document.getElementById('dash-confirmed');
+  const list = document.getElementById('dash-list');
+  if (!callsEl || !list) return;
+
+  const names = [
+    ['Priya Nair', 'Dr. Rohan Kapoor', 'confirmed', 'Confirmed'],
+    ['Arjun Verma', 'Dr. Sunita Rao', 'reschedule', 'Reschedule'],
+    ['Fatima Sheikh', 'Dr. Anjali Sharma', 'confirmed', 'Confirmed'],
+    ['Karan Malhotra', 'Dr. Meera Iyer', 'progress', 'In progress'],
+  ];
+  const times = ['9:00 AM', '11:45 AM', '1:30 PM', '4:15 PM'];
+
+  setInterval(() => {
+    let calls = parseInt(callsEl.textContent, 10) + 1;
+    callsEl.textContent = calls;
+
+    const [name, doctor, cls, label] = names[Math.floor(Math.random() * names.length)];
+    if (cls === 'confirmed') {
+      confirmedEl.textContent = parseInt(confirmedEl.textContent, 10) + 1;
+    }
+    const time = times[Math.floor(Math.random() * times.length)];
+
+    const row = document.createElement('div');
+    row.className = 'dash-row dash-row-new';
+    row.innerHTML = `
+      <span><span class="dash-row-name">${name}</span><span class="dash-row-meta">${doctor} · ${time}</span></span>
+      <span class="dash-row-status ${cls}">${label}</span>
+    `;
+    list.insertBefore(row, list.firstChild);
+    if (list.children.length > 3) {
+      list.removeChild(list.lastChild);
+    }
+  }, 4000);
+})();
+
+// Scroll-triggered reveal - fades/slides sections and cards into view once,
+// the first time they cross into the viewport.
+(function () {
+  const targets = document.querySelectorAll('.reveal');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('in-view');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+  targets.forEach((el) => observer.observe(el));
+})();
+
+document.getElementById('contact-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('contact-submit');
+  const status = document.getElementById('contact-status');
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  status.style.display = 'none';
+  status.className = '';
+
+  const payload = {
+    name: document.getElementById('name').value,
+    email: document.getElementById('email').value,
+    org: document.getElementById('org').value,
+    message: document.getElementById('message').value,
+  };
+
+  try {
+    const res = await fetch('/api/contact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      status.textContent = "Thanks — we'll be in touch shortly.";
+      status.className = 'ok';
+      document.getElementById('contact-form').reset();
+    } else {
+      status.textContent = data.detail || 'Something went wrong. Please try again.';
+      status.className = 'err';
+    }
+  } catch (err) {
+    status.textContent = 'Network error — please try again.';
+    status.className = 'err';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+});
+</script>
+
+</body>
+</html>

@@ -27,12 +27,15 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, WebSocket
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.staticfiles import StaticFiles
 
 load_dotenv(override=True)
 
 PATIENTS_FILE = Path(__file__).parent / "patients.json"
 CALL_LOG_FILE = Path(__file__).parent / "logs" / "call_log.csv"
 DASHBOARD_HTML_FILE = Path(__file__).parent / "dashboard.html"
+LANDING_HTML_FILE = Path(__file__).parent / "landing.html"
+ASSETS_DIR = Path(__file__).parent / "assets"
 
 security = HTTPBasic()
 
@@ -115,11 +118,18 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
 
 
 @app.get("/")
+async def get_landing() -> FileResponse:
+    """Public marketing page."""
+    return FileResponse(LANDING_HTML_FILE)
+
+
+@app.get("/app")
 async def get_dashboard() -> FileResponse:
-    """Simple dashboard: trigger calls and browse past results.
+    """Operational dashboard: trigger calls and browse past results.
 
     The page itself is a static shell with no sensitive data - it's left
     unauthenticated so it always loads. The actual protection is on the
@@ -129,6 +139,58 @@ async def get_dashboard() -> FileResponse:
     which proved unreliable in testing.
     """
     return FileResponse(DASHBOARD_HTML_FILE)
+
+
+@app.post("/api/contact")
+async def submit_contact_form(request: Request) -> JSONResponse:
+    """Public contact form on the landing page. Emails the submission via
+    Resend's free tier (no domain verification needed for onboarding@resend.dev).
+    """
+    data = await request.json()
+    name = (data.get("name") or "").strip()
+    email = (data.get("email") or "").strip()
+    org = (data.get("org") or "").strip()
+    message = (data.get("message") or "").strip()
+
+    if not name or not email or not message:
+        raise HTTPException(status_code=400, detail="Missing required fields")
+
+    resend_api_key = os.getenv("RESEND_API_KEY")
+    contact_to = os.getenv("CONTACT_EMAIL_TO")
+    if not resend_api_key or not contact_to:
+        raise HTTPException(
+            status_code=500,
+            detail="Contact form isn't configured (RESEND_API_KEY / CONTACT_EMAIL_TO missing)",
+        )
+
+    html_body = f"""
+    <p><strong>Name:</strong> {xml_escape(name)}</p>
+    <p><strong>Email:</strong> {xml_escape(email)}</p>
+    <p><strong>Hospital/Clinic:</strong> {xml_escape(org) or '-'}</p>
+    <p><strong>Message:</strong><br>{xml_escape(message)}</p>
+    """
+
+    async with request.app.state.session.post(
+        "https://api.resend.com/emails",
+        headers={
+            "Authorization": f"Bearer {resend_api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "from": "Vaani contact form <onboarding@resend.dev>",
+            "to": [contact_to],
+            "reply_to": email,
+            "subject": f"New Vaani contact form submission from {name}",
+            "html": html_body,
+        },
+    ) as response:
+        if response.status not in (200, 201):
+            error_text = await response.text()
+            raise HTTPException(
+                status_code=502, detail=f"Failed to send message: {error_text}"
+            )
+
+    return JSONResponse({"status": "sent"})
 
 
 @app.get("/api/patients")

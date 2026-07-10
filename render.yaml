@@ -29,5 +29,9 @@ services:
         sync: false
       - key: DASHBOARD_PASSWORD
         sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: CONTACT_EMAIL_TO
+        sync: false
       - key: HOSPITAL_NAME
         value: City Care Hospital
