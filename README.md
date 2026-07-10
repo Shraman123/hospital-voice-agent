@@ -52,6 +52,10 @@ rejected personal Gmail addresses for this account, so we switched to Twilio, wh
   for each one, so you can send a whole day's reminders with one command.
 - **`.env.example`** - template for all API keys and config. Copy to `.env` and fill in; `.env`
   is gitignored.
+- **`dashboard.html`** - a small web dashboard: trigger calls with a button (instead of curl) and
+  browse `call_log.csv` results in a table. Served at `/` by `server.py`, protected by HTTP Basic
+  auth (`DASHBOARD_USERNAME`/`DASHBOARD_PASSWORD` in `.env`) since it can trigger real, billed
+  phone calls.
 
 ## How a call actually flows
 
@@ -82,6 +86,9 @@ send_reminders.py  --POST /start-->  server.py  --REST API-->  Twilio dials the 
 4. Copy `.env.example` to `.env` and fill in every key.
 5. Edit `patients.json` - at minimum, put your own phone number in one entry so you can test
    safely (`+91XXXXXXXXXX` format).
+6. Set `DASHBOARD_PASSWORD` in `.env` to something of your own choosing (any value - it just
+   needs to match between the server and anything calling `/start`, including
+   `send_reminders.py` and the dashboard login prompt).
 
 ## Running it
 
@@ -107,13 +114,17 @@ send_reminders.py  --POST /start-->  server.py  --REST API-->  Twilio dials the 
    or trigger one directly with curl (always hit the **ngrok** URL, not localhost - the host
    Twilio sees in this request is what gets used to build the callback URL it calls back):
    ```bash
-   curl -X POST https://your-ngrok-url.ngrok-free.app/start \
+   curl -u admin:your-dashboard-password -X POST https://your-ngrok-url.ngrok-free.app/start \
      -H "Content-Type: application/json" \
      -d '{"patient_id": "P001"}'
    ```
+   or open the dashboard in your browser at your ngrok URL (or `http://localhost:7860` for local
+   only) and log in with `DASHBOARD_USERNAME`/`DASHBOARD_PASSWORD` - click "Call now" next to a
+   patient instead.
 5. Your phone rings. Answer it - you should hear the bilingual consent line, then the
    appointment reminder, then a question about confirming/rescheduling/cancelling.
-6. Check `logs/call_log.csv` afterward for the recorded outcome.
+6. Check `logs/call_log.csv` afterward for the recorded outcome, or refresh the dashboard's
+   "Call Log" table.
 
 ## Consent and language handling
 

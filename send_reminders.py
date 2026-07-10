@@ -22,6 +22,10 @@ load_dotenv()
 
 PATIENTS_FILE = Path(__file__).parent / "patients.json"
 SERVER_BASE_URL = os.getenv("SERVER_BASE_URL", "http://localhost:7860")
+DASHBOARD_AUTH = (
+    os.getenv("DASHBOARD_USERNAME", "admin"),
+    os.getenv("DASHBOARD_PASSWORD", ""),
+)
 
 # Seconds to wait between dialing each patient, so calls don't overlap.
 DELAY_BETWEEN_CALLS_SECS = 3
@@ -39,7 +43,9 @@ def main():
 
         print(f"Calling {patient['name']} ({patient['phone_number']})...")
         response = requests.post(
-            f"{SERVER_BASE_URL}/start", json={"patient_id": patient["patient_id"]}
+            f"{SERVER_BASE_URL}/start",
+            json={"patient_id": patient["patient_id"]},
+            auth=DASHBOARD_AUTH,
         )
         print(f"  -> {response.status_code} {response.json()}")
         time.sleep(DELAY_BETWEEN_CALLS_SECS)

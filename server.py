@@ -12,8 +12,10 @@ Adapted from Pipecat's official Twilio outbound-call example pattern:
 https://github.com/pipecat-ai/pipecat-examples/tree/main/twilio-chatbot
 """
 
+import csv
 import json
 import os
+import secrets
 import urllib.parse
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -22,17 +24,51 @@ from xml.sax.saxutils import escape as xml_escape
 import aiohttp
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query, Request, WebSocket
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, WebSocket
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 load_dotenv(override=True)
 
 PATIENTS_FILE = Path(__file__).parent / "patients.json"
+CALL_LOG_FILE = Path(__file__).parent / "logs" / "call_log.csv"
+DASHBOARD_HTML_FILE = Path(__file__).parent / "dashboard.html"
+
+security = HTTPBasic()
+
+
+def require_dashboard_auth(credentials: HTTPBasicCredentials = Depends(security)) -> None:
+    """Protects the dashboard and /start - anyone with this password can trigger
+    real, billed phone calls, so this must not be left open once deployed.
+    Twilio's own callbacks (/answer, /ws) are deliberately NOT behind this,
+    since Twilio can't do interactive HTTP Basic auth.
+    """
+    expected_user = os.getenv("DASHBOARD_USERNAME", "admin")
+    expected_pass = os.getenv("DASHBOARD_PASSWORD")
+    if not expected_pass:
+        raise HTTPException(
+            status_code=500, detail="DASHBOARD_PASSWORD is not set in .env"
+        )
+    valid_user = secrets.compare_digest(credentials.username, expected_user)
+    valid_pass = secrets.compare_digest(credentials.password, expected_pass)
+    if not (valid_user and valid_pass):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Basic"},
+        )
 
 
 def load_patients() -> list[dict]:
     with open(PATIENTS_FILE, encoding="utf-8") as f:
         return json.load(f)
+
+
+def load_call_log() -> list[dict]:
+    if not CALL_LOG_FILE.exists():
+        return []
+    with open(CALL_LOG_FILE, encoding="utf-8") as f:
+        return list(csv.DictReader(f))
 
 
 async def make_twilio_call(
@@ -72,8 +108,26 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
+@app.get("/")
+async def get_dashboard(_: None = Depends(require_dashboard_auth)) -> FileResponse:
+    """Simple dashboard: trigger calls and browse past results."""
+    return FileResponse(DASHBOARD_HTML_FILE)
+
+
+@app.get("/api/patients")
+async def get_patients(_: None = Depends(require_dashboard_auth)) -> JSONResponse:
+    return JSONResponse(load_patients())
+
+
+@app.get("/api/call-log")
+async def get_call_log(_: None = Depends(require_dashboard_auth)) -> JSONResponse:
+    return JSONResponse(load_call_log())
+
+
 @app.post("/start")
-async def initiate_reminder_call(request: Request) -> JSONResponse:
+async def initiate_reminder_call(
+    request: Request, _: None = Depends(require_dashboard_auth)
+) -> JSONResponse:
     """Trigger an outbound reminder call for a patient in patients.json.
 
     Body: {"patient_id": "P001"}

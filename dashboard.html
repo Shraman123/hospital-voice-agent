@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Hospital Voice Agent</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    max-width: 900px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+    color: #1a1a1a;
+    background: #fafafa;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { color: #e8e8e8; background: #16171a; }
+    table { background: #202226 !important; }
+    th { background: #2a2c31 !important; }
+    tr:nth-child(even) { background: #24262b !important; }
+    .card { background: #202226 !important; border-color: #33353a !important; }
+    button { background: #3b82f6 !important; }
+    #status { background: #24262b !important; }
+  }
+  h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
+  .subtitle { color: #888; margin-bottom: 1.5rem; font-size: 0.9rem; }
+  .card {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid #eee; }
+  th { background: #f4f4f4; font-weight: 600; }
+  tr:nth-child(even) { background: #f9f9f9; }
+  button {
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    padding: 0.4rem 0.8rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  button:hover { opacity: 0.9; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+  .status-confirmed { background: #d1fae5; color: #065f46; }
+  .status-reschedule { background: #fef3c7; color: #92400e; }
+  .status-cancel { background: #fee2e2; color: #991b1b; }
+  #status {
+    margin-top: 1rem;
+    padding: 0.6rem 0.8rem;
+    border-radius: 6px;
+    background: #eef2ff;
+    font-size: 0.85rem;
+    display: none;
+  }
+  .refresh-link { font-size: 0.8rem; color: #2563eb; cursor: pointer; float: right; }
+</style>
+</head>
+<body>
+
+<h1>Hospital Voice Agent</h1>
+<p class="subtitle">Trigger appointment-reminder calls and review outcomes.</p>
+
+<div class="card">
+  <h2 style="margin-top:0; font-size:1.1rem;">Patients <span class="refresh-link" onclick="loadPatients()">refresh</span></h2>
+  <table id="patients-table">
+    <thead>
+      <tr><th>Name</th><th>Phone</th><th>Doctor</th><th>Appointment</th><th></th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0; font-size:1.1rem;">Call Log <span class="refresh-link" onclick="loadCallLog()">refresh</span></h2>
+  <table id="log-table">
+    <thead>
+      <tr><th>Time (UTC)</th><th>Patient</th><th>Phone</th><th>Status</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<div id="status"></div>
+
+<script>
+function showStatus(msg) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+async function loadPatients() {
+  const res = await fetch('/api/patients');
+  const patients = await res.json();
+  const tbody = document.querySelector('#patients-table tbody');
+  tbody.innerHTML = '';
+  for (const p of patients) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${p.name}</td>
+      <td>${p.phone_number}</td>
+      <td>${p.doctor_name}</td>
+      <td>${p.appointment_date}, ${p.appointment_time}</td>
+      <td><button data-id="${p.patient_id}">Call now</button></td>
+    `;
+    tbody.appendChild(tr);
+  }
+  tbody.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => triggerCall(btn));
+  });
+}
+
+async function triggerCall(btn) {
+  const patientId = btn.dataset.id;
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = 'Calling...';
+  try {
+    const res = await fetch('/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ patient_id: patientId }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showStatus(`Call initiated for ${patientId} (call SID: ${data.call_uuid})`);
+    } else {
+      showStatus(`Error: ${data.detail || 'failed to start call'}`);
+    }
+  } catch (e) {
+    showStatus(`Error: ${e}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+    setTimeout(loadCallLog, 5000);
+  }
+}
+
+async function loadCallLog() {
+  const res = await fetch('/api/call-log');
+  const rows = await res.json();
+  const tbody = document.querySelector('#log-table tbody');
+  tbody.innerHTML = '';
+  for (const r of rows.slice().reverse()) {
+    const tr = document.createElement('tr');
+    const statusClass = 'status-' + (r.status || '').toLowerCase();
+    tr.innerHTML = `
+      <td>${r.timestamp_utc || ''}</td>
+      <td>${r.patient_name || ''}</td>
+      <td>${r.phone_number || ''}</td>
+      <td><span class="status-badge ${statusClass}">${r.status || ''}</span></td>
+    `;
+    tbody.appendChild(tr);
+  }
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="color:#888;">No calls logged yet.</td></tr>';
+  }
+}
+
+loadPatients();
+loadCallLog();
+</script>
+
+</body>
+</html>

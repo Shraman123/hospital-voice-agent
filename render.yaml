@@ -25,5 +25,9 @@ services:
         value: anushka
       - key: GROQ_API_KEY
         sync: false
+      - key: DASHBOARD_USERNAME
+        sync: false
+      - key: DASHBOARD_PASSWORD
+        sync: false
       - key: HOSPITAL_NAME
         value: City Care Hospital
