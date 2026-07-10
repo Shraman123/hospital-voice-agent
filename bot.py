@@ -42,6 +42,8 @@ from pipecat.services.sarvam.tts import SarvamTTSService
 from pipecat.transcriptions.language import Language
 from pipecat.transports.base_transport import BaseTransport
 from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams
+from pipecat.turns.user_stop import SpeechTimeoutUserTurnStopStrategy
+from pipecat.turns.user_turn_strategies import UserTurnStrategies
 from pipecat.workers.runner import WorkerRunner
 
 import call_log
@@ -162,7 +164,19 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool, patient: dict):
     context = LLMContext(tools=[log_response_tool])
     user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
         context,
-        user_params=LLMUserAggregatorParams(vad_analyzer=SileroVADAnalyzer()),
+        user_params=LLMUserAggregatorParams(
+            vad_analyzer=SileroVADAnalyzer(),
+            # Pipecat's default turn-stop strategy loads a local ONNX model
+            # (LocalSmartTurnAnalyzerV3) per call. On a slow/shared free-tier
+            # CPU that load can take 30+ seconds - long enough that Twilio
+            # gives up and closes the WebSocket before the pipeline is ready
+            # (confirmed via Render's logs: "WebSocket closed before
+            # receiving telephony handshake messages"). This swaps it for a
+            # timeout-based strategy that needs no model loading at all.
+            user_turn_strategies=UserTurnStrategies(
+                stop=[SpeechTimeoutUserTurnStopStrategy()]
+            ),
+        ),
     )
 
     pipeline = Pipeline(
