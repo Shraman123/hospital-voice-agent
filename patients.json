@@ -1,0 +1,29 @@
+[
+  {
+    "patient_id": "P001",
+    "name": "Rohan Mehta",
+    "phone_number": "+91XXXXXXXXXX",
+    "doctor_name": "Dr. Anjali Sharma",
+    "department": "Cardiology",
+    "appointment_date": "July 12, 2026",
+    "appointment_time": "10:30 AM"
+  },
+  {
+    "patient_id": "P002",
+    "name": "Sunita Devi",
+    "phone_number": "+91XXXXXXXXXX",
+    "doctor_name": "Dr. Vikram Rao",
+    "department": "Orthopedics",
+    "appointment_date": "July 13, 2026",
+    "appointment_time": "3:00 PM"
+  },
+  {
+    "patient_id": "P003",
+    "name": "Aisha Khan",
+    "phone_number": "+91XXXXXXXXXX",
+    "doctor_name": "Dr. Meera Iyer",
+    "department": "Dermatology",
+    "appointment_date": "July 14, 2026",
+    "appointment_time": "11:15 AM"
+  }
+]

@@ -1,0 +1,14 @@
+# pipecat-ai's extras pull in exactly the pieces this project needs:
+#   deepgram  -> Deepgram STT client
+#   sarvam    -> Sarvam AI TTS client (Hindi/English + other Indian languages)
+#   groq      -> Groq LLM client
+#   silero    -> local, free voice-activity detector (no API key needed)
+#   websocket -> FastAPI WebSocket transport
+#   runner    -> fastapi, uvicorn, python-dotenv, and Pipecat's runner helpers
+pipecat-ai[deepgram,sarvam,groq,silero,websocket,runner]>=1.4.0
+
+# server.py calls Plivo's REST API directly over HTTP (no official Plivo SDK needed)
+aiohttp>=3.9
+
+# send_reminders.py uses this to call our own /start endpoint
+requests>=2.31

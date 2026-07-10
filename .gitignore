@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Call outcome logs contain patient names/phone numbers - never commit them.
+logs/
+
+# Local runtime logs from testing (server.py/ngrok stdout) - may contain
+# patient data and account details in request URLs.
+*.log
