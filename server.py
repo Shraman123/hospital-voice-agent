@@ -109,8 +109,16 @@ app = FastAPI(lifespan=lifespan)
 
 
 @app.get("/")
-async def get_dashboard(_: None = Depends(require_dashboard_auth)) -> FileResponse:
-    """Simple dashboard: trigger calls and browse past results."""
+async def get_dashboard() -> FileResponse:
+    """Simple dashboard: trigger calls and browse past results.
+
+    The page itself is a static shell with no sensitive data - it's left
+    unauthenticated so it always loads. The actual protection is on the
+    /api/* and /start calls the page's JS makes, which it authenticates
+    explicitly (see dashboard.html's apiFetch()) rather than relying on the
+    browser to reattach cached HTTP Basic Auth credentials to fetch() calls,
+    which proved unreliable in testing.
+    """
     return FileResponse(DASHBOARD_HTML_FILE)
 
 

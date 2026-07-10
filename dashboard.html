@@ -101,8 +101,38 @@ function showStatus(msg) {
   el.style.display = 'block';
 }
 
+// Every /api/* and /start call needs Basic Auth. Browsers don't reliably
+// reattach cached HTTP-auth credentials to background fetch() calls (this
+// bit us in testing - the page loaded fine but every fetch silently failed
+// auth), so we manage credentials explicitly here instead of relying on
+// the browser's native auth prompt/cache.
+function getAuthHeader() {
+  let user = sessionStorage.getItem('dash_user');
+  let pass = sessionStorage.getItem('dash_pass');
+  if (!user || !pass) {
+    user = window.prompt('Dashboard username:') || '';
+    pass = window.prompt('Dashboard password:') || '';
+    sessionStorage.setItem('dash_user', user);
+    sessionStorage.setItem('dash_pass', pass);
+  }
+  return 'Basic ' + btoa(`${user}:${pass}`);
+}
+
+async function apiFetch(url, options = {}) {
+  options.headers = Object.assign({}, options.headers, { Authorization: getAuthHeader() });
+  const res = await fetch(url, options);
+  if (res.status === 401) {
+    sessionStorage.removeItem('dash_user');
+    sessionStorage.removeItem('dash_pass');
+    alert('Invalid dashboard credentials - please try again.');
+    location.reload();
+    throw new Error('401 Unauthorized');
+  }
+  return res;
+}
+
 async function loadPatients() {
-  const res = await fetch('/api/patients');
+  const res = await apiFetch('/api/patients');
   const patients = await res.json();
   const tbody = document.querySelector('#patients-table tbody');
   tbody.innerHTML = '';
@@ -128,7 +158,7 @@ async function triggerCall(btn) {
   const originalText = btn.textContent;
   btn.textContent = 'Calling...';
   try {
-    const res = await fetch('/start', {
+    const res = await apiFetch('/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ patient_id: patientId }),
@@ -149,7 +179,7 @@ async function triggerCall(btn) {
 }
 
 async function loadCallLog() {
-  const res = await fetch('/api/call-log');
+  const res = await apiFetch('/api/call-log');
   const rows = await res.json();
   const tbody = document.querySelector('#log-table tbody');
   tbody.innerHTML = '';
