@@ -56,6 +56,23 @@ HOSPITAL_NAME = os.getenv("HOSPITAL_NAME", "the hospital")
 # Seconds to let the bot's goodbye finish playing before we hang up.
 HANGUP_DELAY_SECS = 6
 
+# Creating a SileroVADAnalyzer() loads and compiles an ONNX model - cheap on a
+# fast local machine, but slow enough on a throttled free-tier CPU (Render)
+# that doing it fresh per call caused Twilio to give up waiting and close the
+# WebSocket before the pipeline was ready. One shared instance, created once
+# and pre-warmed at server startup (see server.py's lifespan), keeps every
+# call fast. Safe here since this project only ever runs one call at a time;
+# a production deployment with real concurrent calls would need one instance
+# per call instead.
+_shared_vad_analyzer: SileroVADAnalyzer | None = None
+
+
+def get_shared_vad_analyzer() -> SileroVADAnalyzer:
+    global _shared_vad_analyzer
+    if _shared_vad_analyzer is None:
+        _shared_vad_analyzer = SileroVADAnalyzer()
+    return _shared_vad_analyzer
+
 
 def build_system_instruction(patient: dict) -> str:
     """Build the per-patient system prompt, including a verbatim consent script."""
@@ -165,7 +182,7 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool, patient: dict):
     user_aggregator, assistant_aggregator = LLMContextAggregatorPair(
         context,
         user_params=LLMUserAggregatorParams(
-            vad_analyzer=SileroVADAnalyzer(),
+            vad_analyzer=get_shared_vad_analyzer(),
             # Pipecat's default turn-stop strategy loads a local ONNX model
             # (LocalSmartTurnAnalyzerV3) per call. On a slow/shared free-tier
             # CPU that load can take 30+ seconds - long enough that Twilio

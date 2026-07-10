@@ -101,6 +101,15 @@ async def make_twilio_call(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.session = aiohttp.ClientSession()
+
+    # Pre-warm the VAD model at server boot instead of paying that cost on
+    # the first live call - see bot.py's get_shared_vad_analyzer() docstring.
+    # Render won't mark the deploy "live" until this startup finishes, so
+    # this blocks the boot, not a real call.
+    from bot import get_shared_vad_analyzer
+
+    get_shared_vad_analyzer()
+
     yield
     await app.state.session.close()
 
