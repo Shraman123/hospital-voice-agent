@@ -1,193 +1,230 @@
-# Hospital Appointment Reminder Voice Agent
+<div align="center">
 
-An outbound-calling voice bot built on [Pipecat](https://github.com/pipecat-ai/pipecat) that
-calls patients, reminds them of an upcoming appointment, and asks them to confirm, reschedule,
-or cancel - in Hindi or English, detected automatically.
+<img src="https://hospital-voice-agent-5qm9.onrender.com/assets/logo-full.svg" alt="Vaani" width="220" />
 
-Adapted from Pipecat's official [Twilio outbound-call
-example](https://github.com/pipecat-ai/pipecat-examples/tree/main/twilio-chatbot).
+### Every patient reminded, in their own language.
+
+An outbound-calling voice agent that phones patients, reminds them of an upcoming
+appointment, and captures a confirm, reschedule, or cancel — automatically, in
+Hindi or English, detected mid-conversation.
+
+[![Python](https://img.shields.io/badge/python-3.11-3776AB?logo=python&logoColor=white)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Pipecat](https://img.shields.io/badge/built%20with-Pipecat-D97757)](https://github.com/pipecat-ai/pipecat)
+[![Twilio](https://img.shields.io/badge/telephony-Twilio-F22F46?logo=twilio&logoColor=white)](https://twilio.com)
+[![Deploy](https://img.shields.io/badge/deployed%20on-Render-46E3B7?logo=render&logoColor=white)](https://render.com)
+
+**[🌐 Live site](https://hospital-voice-agent-5qm9.onrender.com)** · **[📊 Dashboard](https://hospital-voice-agent-5qm9.onrender.com/app)** (password-protected)
+
+</div>
+
+---
+
+## Contents
+
+- [What this is](#what-this-is)
+- [Stack](#stack)
+- [How a call flows](#how-a-call-flows)
+- [Project structure](#project-structure)
+- [Getting started](#getting-started)
+- [Consent & language handling](#consent--language-handling)
+- [Deploying to Render](#deploying-to-render)
+- [Costs & limits](#costs--limits-as-of-writing)
+- [Roadmap](#roadmap)
+
+## What this is
+
+Front-desk staff calling every patient by hand doesn't scale, and no-shows are expensive.
+This agent does the calling instead — a real outbound phone call (not a chat widget), built
+on [Pipecat](https://github.com/pipecat-ai/pipecat) and adapted from Pipecat's official
+[Twilio outbound-call example](https://github.com/pipecat-ai/pipecat-examples/tree/main/twilio-chatbot).
+
+Every call:
+
+- Opens with an explicit, fixed consent line — in English *and* Hindi
+- Reminds the patient of their doctor, date, and time
+- Detects whether the patient answers in Hindi, English, or a mix, and replies in kind
+- Asks for and captures a clear confirm / reschedule / cancel outcome
+- Logs that outcome automatically — no manual data entry
 
 ## Stack
 
 | Stage | Service | Why |
 |---|---|---|
-| Telephony | [Twilio](https://twilio.com) | Dials the patient, streams call audio to us |
-| Speech-to-text | [Deepgram](https://deepgram.com) (Nova-3, `multi` mode) | Free tier; code-switches between Hindi and English in real time |
-| LLM | [Groq](https://groq.com) (Llama 3.3 70B) | Genuine ongoing free tier, very fast |
-| Text-to-speech | [Sarvam AI](https://sarvam.ai) (`bulbul:v2`) | Built specifically for Hindi/Indian-language speech; real speaker voices |
+| 📞 Telephony | [Twilio](https://twilio.com) | Dials the patient, streams call audio to us |
+| 👂 Speech-to-text | [Deepgram](https://deepgram.com) (Nova-3, `multi` mode) | Free tier; code-switches between Hindi and English in real time |
+| 🧠 LLM | [Groq](https://groq.com) (Llama 3.3 70B) | Genuine ongoing free tier, very fast |
+| 🗣️ Text-to-speech | [Sarvam AI](https://sarvam.ai) (`bulbul:v2`) | Built specifically for Hindi/Indian-language speech; real speaker voices |
+| ☁️ Hosting | [Render](https://render.com) | Free web-service tier, no card required |
+| ✉️ Contact form | [Resend](https://resend.com) | Free tier email delivery for the landing page |
 
-**A note on "free":** Deepgram and Groq have real, ongoing free tiers used as-is here (see the
-[Costs & limits](#costs--limits) section for exact numbers). We originally tried ElevenLabs for
-TTS, but discovered its free tier blocks *all* API access to voices (confirmed by testing, not
-just reading docs) - the web app is free, the API isn't, even on a $0 plan. Sarvam AI replaced it;
-check their free-tier terms yourself at signup, since this project hasn't been running long enough
-to confirm their exact limits. Twilio is the one guaranteed non-free piece - making an actual phone
-call over the real telephone network always costs something (a small amount to rent a phone
-number, plus a per-minute rate), though new accounts get ~$15 in trial credit (no card required to
-start) that's enough to test this project. We originally tried Plivo here too, but its signup flow
-rejected personal Gmail addresses for this account, so we switched to Twilio, which accepts them.
+<details>
+<summary><b>A note on "free"</b></summary>
+<br>
 
-## Files
+Deepgram and Groq have real, ongoing free tiers used as-is here (see [Costs & limits](#costs--limits-as-of-writing)
+for exact numbers). We originally tried ElevenLabs for TTS, but discovered its free tier blocks
+*all* API access to voices (confirmed by testing, not just reading docs) — the web app is free,
+the API isn't, even on a $0 plan. Sarvam AI replaced it; check their free-tier terms yourself at
+signup, since this project hasn't been running long enough to confirm their exact limits.
 
-- **`patients.json`** - your patient list: name, phone number, doctor, appointment date/time.
-  Stand-in for a real patient database. Edit this with real (or your own, for testing) phone
-  numbers.
-- **`call_log.py`** - one function, `log_response()`, that appends a row to
-  `logs/call_log.csv` every time a patient confirms, reschedules, or cancels. Swap this for a
-  real database later without touching anything else.
-- **`bot.py`** - the actual conversation. For one phone call, it wires together:
-  `Twilio audio in -> Deepgram (speech-to-text) -> language router -> conversation context ->
-  Groq LLM -> Sarvam (text-to-speech) -> Twilio audio out`. It builds a per-patient system prompt
-  (containing the consent line and the appointment details), gives the LLM one tool -
-  `log_patient_response(status)` - and hangs up a few seconds after that tool is called.
-- **`language_router.py`** - a small custom Pipecat processor. Unlike ElevenLabs' multilingual
-  model (which auto-detects language from text), Sarvam's TTS needs to be told explicitly which
-  language to speak. This watches Deepgram's per-utterance detected language go by and retunes
-  the TTS service whenever the patient switches between Hindi and English.
-- **`server.py`** - the webhook server Twilio talks to. `POST /start` looks up a patient and asks
-  Twilio to dial them; `GET /answer` is what Twilio fetches once the patient picks up (it returns
-  TwiML telling Twilio to open a WebSocket back to us); `WS /ws` is where the call's actual audio
-  streams in both directions, and where `bot.py`'s pipeline gets started.
-- **`send_reminders.py`** - a CLI script that loops over `patients.json` and calls `POST /start`
-  for each one, so you can send a whole day's reminders with one command.
-- **`.env.example`** - template for all API keys and config. Copy to `.env` and fill in; `.env`
-  is gitignored.
-- **`dashboard.html`** - a small web dashboard: trigger calls with a button (instead of curl) and
-  browse `call_log.csv` results in a table. Served at `/` by `server.py`, protected by HTTP Basic
-  auth (`DASHBOARD_USERNAME`/`DASHBOARD_PASSWORD` in `.env`) since it can trigger real, billed
-  phone calls.
+Twilio is the one guaranteed non-free piece — making an actual phone call over the real
+telephone network always costs something (a small amount to rent a phone number, plus a
+per-minute rate), though new accounts get ~$15 in trial credit (no card required) that's enough
+to test this project. We originally tried Plivo, but its signup flow rejected personal Gmail
+addresses for this account, so we switched to Twilio, which accepts them.
 
-## How a call actually flows
+</details>
 
-```
-send_reminders.py  --POST /start-->  server.py  --REST API-->  Twilio dials the patient
-                                                                        |
-                                          patient picks up             |
-                                                                        v
-                                     server.py <--GET /answer-- Twilio
-                                          |
-                                          | returns TwiML <Connect><Stream> pointing at wss://.../ws
-                                          v
-                                     Twilio opens a WebSocket --> server.py's /ws
-                                          |
-                                          v
-                                     bot.py's pipeline runs for the rest of the call
+## How a call flows
+
+```mermaid
+sequenceDiagram
+    participant CLI as send_reminders.py / dashboard
+    participant SRV as server.py
+    participant TW as Twilio
+    participant BOT as bot.py pipeline
+
+    CLI->>SRV: POST /start - patient_id
+    SRV->>TW: REST API - dial patient
+    TW-->>SRV: GET /answer
+    SRV-->>TW: TwiML - Connect and Stream
+    TW->>SRV: WebSocket /ws opens
+    SRV->>BOT: hand off call audio
+    BOT->>BOT: Deepgram to Groq to Sarvam
+    BOT->>SRV: log_patient_response status
+    SRV-->>CLI: outcome appears in call log
 ```
 
-## Setup
+## Project structure
 
-1. **Get API keys** (all links above).
-2. **Buy a Twilio phone number** that supports voice, from the
-   [Twilio console](https://console.twilio.com/us1/develop/phone-numbers/manage/search).
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Copy `.env.example` to `.env` and fill in every key.
-5. Edit `patients.json` - at minimum, put your own phone number in one entry so you can test
-   safely (`+91XXXXXXXXXX` format).
-6. Set `DASHBOARD_PASSWORD` in `.env` to something of your own choosing (any value - it just
-   needs to match between the server and anything calling `/start`, including
-   `send_reminders.py` and the dashboard login prompt).
+```
+hospital-voice-agent/
+├── bot.py                 # Pipecat pipeline for one call: STT → LLM → TTS
+├── language_router.py     # Retunes Sarvam's TTS language mid-call to match the patient
+├── server.py               # FastAPI app: Twilio webhooks, dashboard, contact form
+├── call_log.py             # Appends confirm/reschedule/cancel outcomes to a CSV
+├── patients.json           # Patient list (stand-in for a real database)
+├── send_reminders.py       # CLI: trigger reminder calls for every patient
+├── dashboard.html           # Password-protected ops dashboard (/app)
+├── landing.html             # Public marketing page (/)
+├── assets/                  # Logo marks (icon, badge, full lockup)
+├── render.yaml               # Render Blueprint — one-click deploy config
+├── requirements.txt
+└── .env.example
+```
 
-## Running it
+## Getting started
 
-1. Start the server:
-   ```bash
-   python server.py
-   ```
-2. In a second terminal, expose it to the internet with [ngrok](https://ngrok.com) (Twilio needs
-   a public URL to reach you - it can't call `localhost`):
-   ```bash
-   ngrok http 7860
-   ```
-   Copy the `https://....ngrok-free.app` URL it prints.
-3. Put that URL in `.env` as `SERVER_BASE_URL` (needed by `send_reminders.py`).
-4. Trigger a call:
-   ```bash
-   python send_reminders.py P001
-   ```
-   or call every patient in the file:
-   ```bash
-   python send_reminders.py
-   ```
-   or trigger one directly with curl (always hit the **ngrok** URL, not localhost - the host
-   Twilio sees in this request is what gets used to build the callback URL it calls back):
-   ```bash
-   curl -u admin:your-dashboard-password -X POST https://your-ngrok-url.ngrok-free.app/start \
-     -H "Content-Type: application/json" \
-     -d '{"patient_id": "P001"}'
-   ```
-   or open the dashboard in your browser at your ngrok URL (or `http://localhost:7860` for local
-   only) and log in with `DASHBOARD_USERNAME`/`DASHBOARD_PASSWORD` - click "Call now" next to a
-   patient instead.
-5. Your phone rings. Answer it - you should hear the bilingual consent line, then the
-   appointment reminder, then a question about confirming/rescheduling/cancelling.
-6. Check `logs/call_log.csv` afterward for the recorded outcome, or refresh the dashboard's
-   "Call Log" table.
+### 1. Prerequisites
 
-## Consent and language handling
+- Python 3.11+
+- API keys: [Twilio](https://console.twilio.com), [Deepgram](https://console.deepgram.com),
+  [Groq](https://console.groq.com), [Sarvam AI](https://sarvam.ai)
+- A Twilio phone number that supports voice ([buy one here](https://console.twilio.com/us1/develop/phone-numbers/manage/search))
+- [ngrok](https://ngrok.com) for local testing
 
-- The very first thing the bot says, in every call, is a fixed (not LLM-improvised) consent
-  line in English and Hindi, built in `bot.py`'s `build_system_instruction()`. The system prompt
-  instructs the LLM to say this "verbatim, and nothing else" as its first turn - see
-  [Possible improvements](#possible-improvements) for a more bulletproof way to guarantee this.
-- Deepgram's `language="multi"` setting transcribes whatever language the patient speaks
-  (Hindi/English code-switching) and tags each transcript with the language it detected. The
-  system prompt instructs the LLM to always reply in the same language it was just addressed in.
-  Unlike ElevenLabs' multilingual model (which auto-detects language from text), Sarvam's TTS
-  needs to be told explicitly which language to speak - so `language_router.py` watches the
-  detected language on each transcript and pushes a `TTSUpdateSettingsFrame` to retune Sarvam
-  whenever it changes.
+### 2. Install
 
-## Deploying (Render)
+```bash
+pip install -r requirements.txt
+cp .env.example .env   # fill in every key
+```
 
-Once you're done testing locally with ngrok, deploy to [Render](https://render.com) for a
-persistent public URL - no more localhost, no more manual tunnels.
+Edit `patients.json` — at minimum, put your own phone number in one entry so you can test
+safely (`+91XXXXXXXXXX` format). Set `DASHBOARD_PASSWORD` in `.env` to anything of your choosing.
+
+### 3. Run locally
+
+```bash
+python server.py
+```
+
+In a second terminal, expose it to the internet (Twilio can't call `localhost`):
+
+```bash
+ngrok http 7860
+```
+
+Put the `https://....ngrok-free.app` URL ngrok prints into `.env` as `SERVER_BASE_URL`.
+
+### 4. Trigger a call
+
+```bash
+python send_reminders.py P001          # one patient
+python send_reminders.py               # everyone in patients.json
+```
+
+or open the ngrok URL in a browser and log in with `DASHBOARD_USERNAME`/`DASHBOARD_PASSWORD` —
+click **Call now** next to a patient instead.
+
+Your phone rings. Answer it — you should hear the bilingual consent line, then the reminder,
+then a question about confirming, rescheduling, or cancelling. Check `logs/call_log.csv`
+(or the dashboard's Call Log table) for the recorded outcome afterward.
+
+## Consent & language handling
+
+- The bot's very first line, every call, is a **fixed, not LLM-improvised** consent statement
+  in English and Hindi, built in `bot.py`'s `build_system_instruction()`. The system prompt
+  instructs the LLM to say it "verbatim, and nothing else" — see [Roadmap](#roadmap) for a more
+  bulletproof way to guarantee this.
+- Deepgram's `language="multi"` mode transcribes Hindi/English code-switching and tags each
+  transcript with the language it detected. Sarvam's TTS needs to be told explicitly which
+  language to speak next (unlike ElevenLabs' auto-detecting model) — `language_router.py`
+  watches the detected language on each transcript and pushes a `TTSUpdateSettingsFrame` to
+  retune Sarvam whenever it changes, filtering out languages Sarvam doesn't actually support.
+
+## Deploying to Render
 
 1. Push this repo to GitHub (private is fine).
-2. On [dashboard.render.com](https://dashboard.render.com), click **New > Blueprint** and connect
-   the repo. Render reads `render.yaml` and configures the service automatically.
-3. Render will prompt you to fill in the secret env vars (`TWILIO_ACCOUNT_SID`,
-   `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`, `DEEPGRAM_API_KEY`, `SARVAM_API_KEY`,
-   `GROQ_API_KEY`) - paste them there, not into `render.yaml` or `.env` in git.
-4. Deploy. Render gives you a persistent URL like `https://hospital-voice-agent.onrender.com`.
-5. Point `send_reminders.py` at that URL instead of your ngrok URL (set `SERVER_BASE_URL` in
-   whatever `.env` you run `send_reminders.py` from).
+2. On [dashboard.render.com](https://dashboard.render.com): **New +** → **Blueprint** → connect
+   this repo. Render reads `render.yaml` and configures the service automatically.
+3. Fill in the prompted secrets (`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
+   `TWILIO_PHONE_NUMBER`, `DEEPGRAM_API_KEY`, `SARVAM_API_KEY`, `GROQ_API_KEY`,
+   `DASHBOARD_USERNAME`, `DASHBOARD_PASSWORD`, `RESEND_API_KEY`, `CONTACT_EMAIL_TO`) —
+   into Render's dashboard, never into `render.yaml` or a committed `.env`.
+4. Deploy. Render gives you a persistent URL — point `send_reminders.py` at it instead of ngrok.
 
-**Free tier tradeoff**: Render's free web services spin down after ~15 minutes of inactivity, with
-a ~1 minute cold-start delay on the next request. This project's flow is naturally resilient to
-that: `send_reminders.py`'s call to `/start` is itself the request that wakes the server, and it
-happens *before* Twilio ever dials the patient - so by the time Twilio calls back to `/answer` and
-opens the `/ws` WebSocket, the server is already warm.
+<details>
+<summary><b>Free-tier cold-start tradeoff</b></summary>
+<br>
+
+Render's free web services spin down after ~15 minutes of inactivity, with a ~1 minute
+cold-start delay on the next request. This project's flow is naturally resilient to that:
+`send_reminders.py`'s call to `/start` is itself the request that wakes the server, and it
+happens *before* Twilio ever dials the patient — so by the time Twilio calls back to `/answer`
+and opens the `/ws` WebSocket, the server is already warm. The VAD model is also pre-warmed at
+server *boot*, not on the first call, since ONNX model loading on a throttled free CPU was slow
+enough to make Twilio give up waiting mid-call otherwise.
+
+</details>
 
 ## Costs & limits (as of writing)
 
-- **Deepgram**: free tier credit for new accounts; Hindi/English code-switch quality can vary -
-  test with real Hinglish phrases before relying on it.
-- **Groq**: free tier is rate-limited (roughly 30 requests/min, 1,000 requests/day on
-  `llama-3.3-70b-versatile`), not credit-limited - fine for sequential reminder calls, watch the
-  daily cap if you scale up call volume.
-- **Sarvam AI**: check current free-tier terms at [sarvam.ai](https://sarvam.ai) when you sign
-  up - not independently verified for this project.
-- **Twilio**: not free - phone number rental + per-minute call charges apply. New accounts get
-  ~$15 in trial credit (no card required to sign up), which is enough to buy a number and place
-  several test calls.
+| Service | Notes |
+|---|---|
+| Deepgram | Free tier credit for new accounts; Hindi/English code-switch quality can vary — test with real Hinglish phrases |
+| Groq | Rate-limited (~30 req/min, 1,000 req/day on `llama-3.3-70b-versatile`), not credit-limited |
+| Sarvam AI | Check current free-tier terms at signup — not independently verified for this project |
+| Twilio | Not free — number rental + per-minute charges. ~$15 trial credit on signup, no card required |
+| Render | Free web-service tier, no card required; spins down when idle |
+| Resend | 100 emails/day free, no domain verification needed for testing |
 
-## Possible improvements
+## Roadmap
 
-- **Guarantee the consent line word-for-word**: right now the LLM is *instructed* to say the
-  consent line verbatim, but an LLM can still paraphrase. For a production/compliance-sensitive
-  deployment, speak the consent line directly via a `TTSSpeakFrame` pushed before the LLM ever
-  runs, bypassing the LLM for that one line entirely.
-- **Real database instead of `patients.json`/`call_log.csv`**: swap in Postgres/SQLite once you
-  have more than a handful of patients; `call_log.py` is already isolated so this is a
-  single-file change.
-- **Retry logic**: no-answer/voicemail detection and automatic retry aren't implemented.
-- **Call recording & consent enforcement**: today the bot states that the call *may* be
-  recorded, but nothing here actually enables Twilio call recording or halts the call if consent
-  is refused - add explicit handling if recording is something you need.
-- **India-specific compliance**: outbound calling to patients may be subject to
-  TRAI/DND-registry and DPDP Act (data protection) rules in India - this project is a technical
-  starting point, not legal compliance; check applicable regulations before calling real
-  patients at scale.
+- [ ] **Guarantee the consent line word-for-word** — speak it via a `TTSSpeakFrame` pushed
+      before the LLM ever runs, bypassing the LLM (and any risk of paraphrasing) for that one line
+- [ ] **Real database** instead of `patients.json` / `call_log.csv` — `call_log.py` is already
+      isolated, so this is a single-file swap
+- [ ] **Retry logic** for no-answer / voicemail detection
+- [ ] **Call recording & consent enforcement** — today the bot *states* the call may be
+      recorded, but nothing enables Twilio recording or halts the call on refused consent
+- [ ] **India-specific compliance** — outbound calling to patients may be subject to
+      TRAI/DND-registry and DPDP Act rules; this project is a technical starting point, not
+      legal compliance — check applicable regulations before calling real patients at scale
+
+---
+
+<div align="center">
+<sub>Built for hospitals that don't want to miss a patient.</sub>
+</div>
