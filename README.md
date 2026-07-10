@@ -129,6 +129,27 @@ send_reminders.py  --POST /start-->  server.py  --REST API-->  Twilio dials the 
   detected language on each transcript and pushes a `TTSUpdateSettingsFrame` to retune Sarvam
   whenever it changes.
 
+## Deploying (Render)
+
+Once you're done testing locally with ngrok, deploy to [Render](https://render.com) for a
+persistent public URL - no more localhost, no more manual tunnels.
+
+1. Push this repo to GitHub (private is fine).
+2. On [dashboard.render.com](https://dashboard.render.com), click **New > Blueprint** and connect
+   the repo. Render reads `render.yaml` and configures the service automatically.
+3. Render will prompt you to fill in the secret env vars (`TWILIO_ACCOUNT_SID`,
+   `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`, `DEEPGRAM_API_KEY`, `SARVAM_API_KEY`,
+   `GROQ_API_KEY`) - paste them there, not into `render.yaml` or `.env` in git.
+4. Deploy. Render gives you a persistent URL like `https://hospital-voice-agent.onrender.com`.
+5. Point `send_reminders.py` at that URL instead of your ngrok URL (set `SERVER_BASE_URL` in
+   whatever `.env` you run `send_reminders.py` from).
+
+**Free tier tradeoff**: Render's free web services spin down after ~15 minutes of inactivity, with
+a ~1 minute cold-start delay on the next request. This project's flow is naturally resilient to
+that: `send_reminders.py`'s call to `/start` is itself the request that wakes the server, and it
+happens *before* Twilio ever dials the patient - so by the time Twilio calls back to `/answer` and
+opens the `/ws` WebSocket, the server is already warm.
+
 ## Costs & limits (as of writing)
 
 - **Deepgram**: free tier credit for new accounts; Hindi/English code-switch quality can vary -

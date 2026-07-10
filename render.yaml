@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: hospital-voice-agent
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python server.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      # Secrets below are declared but left unset here (sync: false) so Render
+      # prompts you to paste each value in its dashboard instead of storing
+      # them in this file / git history.
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_PHONE_NUMBER
+        sync: false
+      - key: DEEPGRAM_API_KEY
+        sync: false
+      - key: SARVAM_API_KEY
+        sync: false
+      - key: SARVAM_VOICE
+        value: anushka
+      - key: GROQ_API_KEY
+        sync: false
+      - key: HOSPITAL_NAME
+        value: City Care Hospital
