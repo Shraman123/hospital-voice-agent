@@ -1,9 +1,9 @@
 [
   {
     "patient_id": "P001",
-    "name": "Rohan Mehta",
+    "name": "Shraman Hazra",
     "phone_number": "+918900406041",
-    "doctor_name": "Dr. Anjali Sharma",
+    "doctor_name": "Dr. Shib Shankar Adhikary",
     "department": "Cardiology",
     "appointment_date": "July 12, 2026",
     "appointment_time": "10:30 AM"
