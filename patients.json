@@ -10,12 +10,12 @@
   },
   {
     "patient_id": "P002",
-    "name": "Sunita Devi",
-    "phone_number": "+91XXXXXXXXXX",
-    "doctor_name": "Dr. Vikram Rao",
-    "department": "Orthopedics",
-    "appointment_date": "July 13, 2026",
-    "appointment_time": "3:00 PM"
+    "name": "Ritabrata Batyabyal",
+    "phone_number": "+918972033803",
+    "doctor_name": "Dr. Kaustav Batyabyal",
+    "department": "Cardiology",
+    "appointment_date": "July 18, 2026",
+    "appointment_time": "11:30 AM"
   },
   {
     "patient_id": "P003",
